@@ -1,6 +1,5 @@
 using WGANGP
 using Test
+using Random
 
-@testset "WGANGP.jl" begin
-    # Write your tests here.
-end
+include("wgangp.jl")
