@@ -1,4 +1,7 @@
 # Somewhat scrappy reference MNIST implementation.
+# Point tensorboard to ./logs when running to monitor the training.
+# Sample images are saved to ./output/mnist/ims, static_... uses a fixed
+# latent sample for each montage and sample_... draws a new latent sample. 
 
 using WGANGP
 using Flux
@@ -17,7 +20,7 @@ using MLDatasets
 @with_kw struct Hyperparameters
     batch_size::Int = 16
     critic_train_factor::Int = 5
-    epochs::Int = 100
+    epochs::Int = 10
     verbose_freq::Int = 20
     sample_freq::Int = 1000
     gpu::Bool = true
@@ -38,7 +41,8 @@ function create_montage(genr, z, n, m; skip_batchnorm = true, kws...)
 end
 
 # TODO/WARN: Actually doesn't mutate genr and crit if they live on CPU when
-# this function is called, so make sure to catch them when they come home from the gym.
+# this function is called, so make sure to |> gpu them or 
+# catch them when they come home from the gym.
 function train!(genr, crit, opt_genr, opt_crit, data_tensor, hps = Hyperparameters(); run_prefix = nothing, runid = nothing)
 
     if hps.gpu == true
@@ -139,8 +143,8 @@ function prepare_mnist_data()
 end
 
 genr, crit = create_mnist_models()
-opt_genr = ADAM(1e-4, (0.9, 0.99))
-opt_crit = ADAM(1e-4, (0.9, 0.99))
+opt_genr = Adam(1e-4, (0.9, 0.99))
+opt_crit = Adam(1e-4, (0.9, 0.99))
 data = prepare_mnist_data()
 hps = Hyperparameters()
 train!(genr, crit, opt_genr, opt_crit, data, hps)

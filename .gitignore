@@ -5,3 +5,6 @@
 /output/
 /logs/
 Manifest.toml
+/examples/mnist/logs/
+/examples/mnist/output/
+/examples/mnist/Manifest.toml
