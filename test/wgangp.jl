@@ -24,5 +24,5 @@ if CUDA.functional()
     end
     
 else
-    @info "No GPU detected, skipping test".
+    @info "No GPU detected, skipping test."
 end
