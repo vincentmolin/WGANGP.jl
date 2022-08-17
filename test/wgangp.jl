@@ -15,27 +15,27 @@ if CUDA.functional()
             Dropout(0.2),
             Dense(8 * 8 * 8, 1)
         ) |> gpu
-        id = 64
-        bs = 32
+        image_dim = 64
+        batch_size = 32
         opt_crit = Adam(0.0002, (0.5, 0.9))
-        x_t = cu(randn(Float32, id, id, 1, bs))
-        x_f = cu(randn(Float32, id, id, 1, bs))
-        @test step_critic!(opt_crit, crit, x_t, x_f) isa Float32
+        x_true = cu(randn(Float32, image_dim, image_dim, 1, batch_size))
+        x_generated = cu(randn(Float32, image_dim, image_dim, 1, batch_size))
+        @test step_critic!(opt_crit, crit, x_true, x_generated) isa Float32
     end
     
     @testset "train steps 1d data" begin
         crit = Chain(
             Dense(4, 8, relu),
-            Dense(8, 4, relu)
+            Dense(8, 4, relu),
             Dropout(0.2),
             Dense(4, 1)
         ) |> gpu
-        id = 4
-        bs = 8
+        data_dim = 4
+        batch_size = 8
         opt_crit = Adam(0.0002, (0.5, 0.9))
-        x_t = cu(randn(Float32, id, bs))
-        x_f = cu(randn(Float32, id, bs))
-        @test step_critic!(opt_crit, crit, x_t, x_f) isa Float32
+        x_true = cu(randn(Float32, data_dim, batch_size))
+        x_generated = cu(randn(Float32, data_dim, batch_size))
+        @test step_critic!(opt_crit, crit, x_true, x_generated) isa Float32
     end
     
 else
