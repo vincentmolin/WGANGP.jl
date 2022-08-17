@@ -8,3 +8,6 @@ Manifest.toml
 /examples/mnist/logs/
 /examples/mnist/output/
 /examples/mnist/Manifest.toml
+/examples/8gaussian/logs/
+/examples/8gaussian/output/
+/examples/8gaussian/Manifest.toml
