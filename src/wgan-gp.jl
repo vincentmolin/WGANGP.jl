@@ -17,7 +17,7 @@ function lipschitz1_gradient_loss(m, x_true, x_generated)
     _, b = pullback(() -> m(x_interpolated), params(x_interpolated))
     grads = b(CUDA.ones(1, batch_size))
     sqddx = grads[x_interpolated] .^ 2
-    mean((sqrt.(sum(sqddx, dims = (1:data_dims))) .- 1.0f0) .^ 2)
+    mean((sqrt.(sum(sqddx, dims = 1:data_dims)) .- 1.0f0) .^ 2)
 end
 
 """
