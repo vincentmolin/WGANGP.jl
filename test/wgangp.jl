@@ -36,6 +36,7 @@ if CUDA.functional()
         x_true = cu(randn(Float32, data_dim, batch_size))
         x_generated = cu(randn(Float32, data_dim, batch_size))
         @test step_critic!(opt_crit, crit, x_true, x_generated) isa Float32
+
     end
     
 else
