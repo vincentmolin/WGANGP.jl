@@ -7,16 +7,17 @@ using CUDA
 using GLMakie
 using Printf
 using Dates
+using Random
 using ProgressMeter
+using Base.Iterators: partition
 using TensorBoardLogger
 using Logging
 using BSON: @save, @load
 using Parameters: @with_kw
 
 @with_kw struct Hyperparameters
-    batch_size::Int = 64
-    critic_train_factor::Int = 5
-    batches_per_epoch = 16
+    batch_size::Int = 128
+    critic_train_factor::Int = 3
     epochs::Int = 10
     verbose_freq::Int = 20
     sample_freq::Int = 1000
@@ -31,7 +32,7 @@ end
 # WARN: Actually doesn't mutate genr and crit if they live on CPU when
 # this function is called, so make sure to |> gpu them or 
 # catch them when they come home from the gym.
-function train!(genr, crit, opt_genr, opt_crit, hps = Hyperparameters(); run_prefix = nothing, runid = nothing)
+function train!(genr, crit, opt_genr, opt_crit, data, hps = Hyperparameters(); run_prefix = nothing, runid = nothing)
 
     if hps.gpu == true
         device = gpu
@@ -57,18 +58,20 @@ function train!(genr, crit, opt_genr, opt_crit, hps = Hyperparameters(); run_pre
     fixed_noise = randn(Float32, latent_dim, 25) |> device
 
     train_steps = 0
-    p = Progress(hps.epochs * hps.batches_per_epoch, "Training...")
+    loss_genr = 0.0
+    p = Progress(hps.epochs * length(data), "Training...")
+
+    data_batches = [data[:, r] |> device for
+            r in partition(1:size(data, 2), hps.batch_size)]
+    
+    z = CUDA.zeros(latent_dim, hps.batch_size)
 
     with_logger(tblog) do
         for epoch in 1:hps.epochs
-
-            data = [ cu(sample_8gaussians(hps.batch_size)) for _ in hps.batches_per_epoch ]
-
-            for i in eachindex(data)
-
-                z = CUDA.randn(latent_dim, hps.batch_size)
+            for i in randperm(length(data_batches))
+                z = CUDA.randn!(z)
                 x_generated = genr(z)
-                x_true = data[i]
+                x_true = data_batches[i]
 
                 loss_crit = step_critic!(opt_crit, crit, x_true, x_generated)
 
@@ -99,19 +102,19 @@ function train!(genr, crit, opt_genr, opt_crit, hps = Hyperparameters(); run_pre
 end
 
 
-function create_models(latent_dim = 2)
+function create_models(latent_dim = 2; device = gpu)
     genr = Chain(
-        Dense(latent_dim, 8, selu),
-        Dense(8, 8, selu),
-        Dense(8, 2, selu)
-    ) |> gpu
+        Dense(latent_dim, 8, relu),
+        Dense(8, 8, relu),
+        Dense(8, 2, relu)
+    ) |> device
 
     crit = Chain(
         Dense(2, 8, relu),
         Dense(8, 8, relu),
         Dense(8, 4, relu),
         Dense(4, 1)
-    ) |> gpu
+    ) |> device
 
     return (genr, crit)
 end
@@ -120,4 +123,5 @@ genr, crit = create_models()
 opt_genr = Adam(1e-4, (0.9, 0.99))
 opt_crit = Adam(1e-4, (0.9, 0.99))
 hps = Hyperparameters()
-train!(genr, crit, opt_genr, opt_crit, hps)
+data = sample_8gaussians(128 * 50)
+train!(genr, crit, opt_genr, opt_crit, data, hps)
