@@ -81,7 +81,7 @@ function train!(genr, crit, opt_genr, opt_crit, data_tensor, hps = Hyperparamete
                 x_generated = genr(z)
                 x_true = data[i]
 
-                loss_crit = step_critic!(opt_crit, crit, x_true, x_generated, hps.batch_size)
+                loss_crit = step_critic!(opt_crit, crit, x_true, x_generated)
 
                 if i % hps.critic_train_factor == 1 || hps.critic_train_factor == 1
                     z = CUDA.randn(latent_dim, hps.batch_size)

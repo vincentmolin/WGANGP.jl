@@ -37,16 +37,8 @@ function train!(genr, crit, opt_genr, opt_crit, data, hps = Hyperparameters(); r
     # Infer latent_dim from generator network architecture
     latent_dim = size(genr.layers[1].weight, 2)
 
-    # Create some folders 
-    runid = isnothing(runid) ? "mnist" : runid
-    path = mkpath("output/$runid")
-    imspath = mkpath("$path/ims")
-
     # Tensorboard logger
     tblog = TBLogger("logs/$runid")
-
-    # For output images
-    fixed_noise = randn(Float32, latent_dim, 25) |> device
 
     train_steps = 1
     loss_genr = 0.0
