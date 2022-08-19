@@ -1,4 +1,4 @@
-# 8 2d Gaussians
+# learn 1 gaussian
 # Point tensorboard to ./logs when running to monitor the training
 
 using WGANGP
@@ -14,10 +14,10 @@ using TensorBoardLogger
 using Logging
 using BSON: @save, @load
 using Parameters: @with_kw
+using Zygote
 
-function sample_8gaussians(n; r = 10.0, sd = 1.0)
-    centers = hcat(collect([r*cos(θ), r*sin(θ)] for θ in 0:π/4:7π/4)...)
-    sd .* randn(Float32, 2, n) + centers[:,rand(1:8, n)]
+function sample_gaussian(n; mean = 4.0, sd = 0.5)
+    mean .+ sd .* randn(Float32, 1, n)
 end
 
 # WARN: Actually doesn't mutate genr and crit if they live on CPU when
@@ -48,19 +48,21 @@ function train!(genr, crit, opt_genr, opt_crit, data, hps = Hyperparameters(); r
     # For output images
     fixed_noise = randn(Float32, latent_dim, 25) |> device
 
-    train_steps = 0
+    train_steps = 1
     loss_genr = 0.0
-    p = Progress(hps.epochs * length(data), "Training...")
 
+    
     data_batches = [data[:, r] |> device for
     r in partition(1:size(data, 2), hps.batch_size)]
     
+    p = Progress(hps.epochs * length(data_batches), "Training...")
+
     z = CUDA.zeros(latent_dim, hps.batch_size)
 
     with_logger(tblog) do
         for epoch in 1:hps.epochs
             for i in randperm(length(data_batches))
-                z = CUDA.randn!(z)
+                CUDA.@sync CUDA.randn!(z)
                 x_generated = genr(z)
                 x_true = data_batches[i]
 
@@ -95,16 +97,14 @@ function train!(genr, crit, opt_genr, opt_crit, data, hps = Hyperparameters(); r
 end
 
 
-function create_models(latent_dim = 2; device = gpu)
+function create_models(latent_dim = 1; device = gpu)
     genr = Chain(
-        Dense(latent_dim => 8, relu),
-        Dense(8 => 8, relu),
-        Dense(8 => 2)
+        Dense(latent_dim => 4, relu),
+        Dense(4 => 1)
     ) |> device
 
     crit = Chain(
-        Dense(2 => 8, relu),
-        Dense(8 => 4, relu),
+        Dense(1 => 4, relu),
         Dense(4 => 1)
     ) |> device
 
@@ -115,7 +115,7 @@ end
     batch_size::Int = 64
     critic_train_factor::Int = 5
     λ_reg::Float32 = 0.1f0
-    epochs::Int = 10
+    epochs::Int = 5
     verbose_freq::Int = 20
     sample_freq::Int = 1000
     gpu::Bool = true
@@ -125,22 +125,24 @@ genr, crit = create_models()
 opt_genr = Adam(1e-4, (0.5, 0.9))
 opt_crit = Adam(1e-4, (0.5, 0.9))
 hps = Hyperparameters()
-data = sample_8gaussians(128 * 100)
+data = sample_gaussian(128 * 100)
 train!(genr, crit, opt_genr, opt_crit, data, hps)
 
-CUDA.@sync zs = CUDA.randn(2, 1024)
-generated = cpu(genr(zs))
+
+critic_train_factor = 5
+batch_size = 64
+λ_reg = 0.1f0
+
+for _ in 1:10
+    for _ in 1:critic_train_factor
+        CUDA.@sync z = CUDA.randn(1, batch_size)
+        x_generated = genr(z)
+        x_true = cu(sample_gaussian(batch_size))
+        loss_crit = step_critic!(opt_crit, crit, x_true, x_generated; λ = λ_reg)
+    end
+    CUDA.@sync z = CUDA.randn(1, batch_size)
+    loss_genr = step_generator!(opt_genr, genr, crit, z)
+end
+
+
 scatter(generated[1,:], generated[2,:])
-
-
-latent_dim = 4
-
-genr = Chain(
-            Dense(latent_dim, 7 * 7 * 8, relu),
-            x -> reshape(x, 7, 7, 8, :),
-            ConvTranspose((5, 5), 8 => 4; stride = 1, pad = 2),
-            BatchNorm(128, relu),
-            ConvTranspose((4, 4), 4 => 2; stride = 2, pad = 1),
-            BatchNorm(64, relu),
-            ConvTranspose((4, 4), 2 => 1, sigmoid; stride = 2, pad = 1)
-        )

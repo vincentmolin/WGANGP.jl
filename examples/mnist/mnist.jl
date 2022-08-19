@@ -75,7 +75,7 @@ function train!(genr, crit, opt_genr, opt_crit, data_tensor, hps = Hyperparamete
 
     with_logger(tblog) do
         for epoch in 1:hps.epochs
-            for i = 1:length(data)
+            for i in eachindex(data)
 
                 z = CUDA.randn(latent_dim, hps.batch_size)
                 x_generated = genr(z)
