@@ -18,7 +18,7 @@ using Parameters: @with_kw
 @with_kw struct Hyperparameters
     batch_size::Int = 128
     critic_train_factor::Int = 3
-    epochs::Int = 10
+    epochs::Int = 100
     verbose_freq::Int = 20
     sample_freq::Int = 1000
     gpu::Bool = true
@@ -57,8 +57,9 @@ function train!(genr, crit, opt_genr, opt_crit, data, hps = Hyperparameters(); r
     # For output images
     fixed_noise = randn(Float32, latent_dim, 25) |> device
 
-    train_steps = 0
-    loss_genr = 0.0
+    train_steps = 1
+    loss_genr = NaN
+
     p = Progress(hps.epochs * length(data), "Training...")
 
     data_batches = [data[:, r] |> device for
@@ -69,14 +70,14 @@ function train!(genr, crit, opt_genr, opt_crit, data, hps = Hyperparameters(); r
     with_logger(tblog) do
         for epoch in 1:hps.epochs
             for i in randperm(length(data_batches))
-                z = CUDA.randn!(z)
+                CUDA.@sync CUDA.randn!(z)
                 x_generated = genr(z)
                 x_true = data_batches[i]
 
                 loss_crit = step_critic!(opt_crit, crit, x_true, x_generated)
 
-                if i % hps.critic_train_factor == 1 || hps.critic_train_factor == 1
-                    z = CUDA.randn(latent_dim, hps.batch_size)
+                if train_steps % hps.critic_train_factor <= 1
+                    CUDA.@sync CUDA.randn!(z)
                     loss_genr = step_generator!(opt_genr, genr, crit, z)
                 end
 
