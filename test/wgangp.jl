@@ -20,6 +20,7 @@ if CUDA.functional()
             Dropout(0.2),
             Dense(8 * 8 * 8, 1)
         ) |> gpu
+        @test !any(x -> any(isnan,x), Flux.params(crit))
 
         genr = Chain(
             Dense(latent_dim, 16 * 16 * 8, relu),
@@ -30,18 +31,19 @@ if CUDA.functional()
             BatchNorm(2, relu),
             ConvTranspose((4, 4), 2 => 1, sigmoid; stride = 2, pad = 1)
         ) |> gpu
+        @test !any(x -> any(isnan,x), Flux.params(genr))
 
         opt_crit = Adam(0.0002, (0.5, 0.9))
         opt_genr = Adam(0.0002, (0.5, 0.9))
         x_true = cu(randn(Float32, image_dim, image_dim, 1, batch_size))
         x_generated = cu(randn(Float32, image_dim, image_dim, 1, batch_size))
         @test step_critic!(opt_crit, crit, x_true, x_generated) isa Float32
+        @test !any(x -> any(isnan,x), Flux.params(crit))
         
         z = cu(randn(Float32, latent_dim, batch_size))
         @test step_generator!(opt_genr, genr, crit, z) isa Float32
+        @test !any(x -> any(isnan,x), Flux.params(genr))
 
-        @test any(x -> any(isnan,x), Flux.params(crit))
-        @test any(x -> any(isnan,x), Flux.params(genr))
     end
     
     @testset "train steps 1d data" begin
