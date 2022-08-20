@@ -9,21 +9,19 @@ Zygote.@adjoint CUDA.fill(x::Real, dims...) = fill(x, dims...), Δ->(sum(Δ), ma
 Estimates 𝐄ₓ(‖∇ₓD(x)‖₂ - 1)², where x is sampled uniformly on lines between
 points from the data distribution and the generators distribution
 """
-function lipschitz1_gradient_loss(m, x_interpolated, batch_size, data_dims)
-    # x_size = size(x_true)
-    # data_dims = length(x_size) - 1
-    # ξ_size = tuple(ones(Int,data_dims)..., batch_size)
-    # CUDA.@sync ξ = CUDA.rand(ξ_size...)
-    # x_interpolated = ξ .* x_true + (1.0f0 .- ξ) .* x_generated
+function lipschitz1_gradient_loss(m, x_interpolated::CuArray, batch_size, data_dims)
     _, b = pullback(() -> m(x_interpolated), params(x_interpolated))
     grads = b(CUDA.ones(1, batch_size))
     sqddx = grads[x_interpolated] .^ 2
     mean((sqrt.(sum(sqddx, dims = 1:data_dims)) .- 1.0f0) .^ 2)
 end
 
-#function gpu_gradient_loss(m, x_interpolated)
-#    mean((sqrt.(sum(abs2, gradient(sum∘m, x_interpolated)[1], dims = (1:ndims(x_interpolated)-1))) .- 1) .^ 2)
-#end
+function lipschitz1_gradient_loss(m, x_interpolated::Array{Float32}, batch_size, data_dims)
+    _, b = pullback(() -> m(x_interpolated), params(x_interpolated))
+    grads = b(ones(Float32, 1, batch_size))
+    sqddx = grads[x_interpolated] .^ 2
+    mean((sqrt.(sum(sqddx, dims = 1:data_dims)) .- 1.0f0) .^ 2)
+end
 
 """
     critic_loss(m, x_true, x_generated, batch_size, λ)
@@ -38,10 +36,14 @@ function generator_loss(m, crit, z)
     -mean(crit(m(z)))
 end
 
-function interpolate_x(x_true, x_generated, batch_size, data_dims)
+function interpolate_x(x_true::CuArray, x_generated::CuArray, batch_size, data_dims)
     ξ = CUDA.rand(ones(Int64, data_dims)..., batch_size)
-    x_interpolated = ξ .* x_true + (1.0f0 .- ξ) .* x_generated
-    x_interpolated
+    ξ .* x_true + (1.0f0 .- ξ) .* x_generated
+end
+
+function interpolate_x(x_true::Array{Float32}, x_generated::Array{Float32}, batch_size, data_dims)
+    ξ = rand(Float32,ones(Int64, data_dims)..., batch_size)
+    ξ .* x_true + (1.0f0 .- ξ) .* x_generated
 end
 
 Zygote.@nograd interpolate_x
