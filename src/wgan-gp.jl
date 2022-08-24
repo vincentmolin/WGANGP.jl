@@ -68,9 +68,30 @@ function step_critic!(opt, m, x_true, x_generated; λ = 10.0f0)
     loss, back = pullback(ps) do
         critic_loss(m, x_true, x_generated, x_interpolated, λ, batch_size, data_dims)
     end
-    gs = back(1.0f0)
+    gs = back(1)
     Flux.update!(opt, ps, gs)
     return loss
+end
+
+function step_critic_debug!(opt, m, x_true, x_generated; λ = 10.0f0)
+    batch_size = size(x_true)[end]
+    data_dims = ndims(x_true) - 1
+    x_interpolated = interpolate_x(x_true, x_generated, batch_size, data_dims)
+    ps = params(m)
+    #loss, back = Zygote._pullback(() -> critic_loss(m, x_true, x_generated, x_interpolated, λ, batch_size, data_dims), ps)
+    loss, back = pullback(ps) do
+        critic_loss(m, x_true, x_generated, x_interpolated, λ, batch_size, data_dims)
+    end
+    gs = back(1)
+
+    for p in ps
+        isnothing(gs[p]) && continue
+        if any(isnan, gs[p])
+            return false, x_interpolated
+        end
+    end
+    Flux.update!(opt, ps, gs)
+    return loss, (gs[p] for p in ps)
 end
 
 """
@@ -83,7 +104,7 @@ function step_generator!(opt, m, crit, z)
     loss, back = pullback(ps) do
         generator_loss(m, crit, z)
     end
-    gs = back(1.0f0)
+    gs = back(1)
     Flux.update!(opt, ps, gs)
     return loss
 end
